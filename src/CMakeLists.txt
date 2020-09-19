@@ -13,6 +13,7 @@ set(SOURCE_FILES
 
 set(HEADER_FILES
     main.h
+    yhs.h
 )
 
 list(APPEND SOURCE_FILES ${HEADER_FILES})
@@ -27,4 +28,4 @@ elseif(WIN32)
 else()
 endif()
 
-add_executable(server ${SOURCE_FILES})
+add_executable(yocto ${SOURCE_FILES})

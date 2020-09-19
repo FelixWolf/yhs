@@ -92,6 +92,37 @@ typedef int socklen_t;
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+#ifdef __linux__
+
+#include <errno.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <sys/select.h>
+#include <netinet/in.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <ifaddrs.h>
+#include <dirent.h>
+#include <arpa/inet.h>
+#include <stdint.h>
+
+#define STRICMP(X,Y) (strcasecmp((X),(Y)))
+#define STRNICMP(X,Y,N) (strncasecmp((X),(Y),(N)))
+#define CLOSESOCKET(X) (close(X))
+#define ALLOCA(X) (alloca(X))
+
+typedef int SOCKET;
+
+#define INVALID_SOCKET (-1)
+
+#define DEBUG_BREAK() (assert(0))
+
+#endif
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 #include <limits.h>
 #include <ctype.h>
 #include <assert.h>
@@ -791,77 +822,12 @@ done:
     {
         CLOSESOCKET(sock);
         sock=INVALID_SOCKET;
+        abort();
     }
 	
 	server->listen_sock=sock;
     
     return sock;
-}
-
-//////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////
-
-static void print_likely_urls(yhsServer *server)
-{
-    SERVER_INFO(server,"YHS: Likely URLs for this system are:\n");
-    SERVER_INFO(server,"\n");
-    
-#ifdef WIN32
-    
-    {
-        char computer_name[500];
-        DWORD computer_name_size=sizeof computer_name;
-        
-        if(!GetComputerNameExA(ComputerNameDnsHostname,computer_name,&computer_name_size))
-            SERVER_INFO(server,"YHS: Failed to get computer name.\n");
-        else
-        {
-            SERVER_INFO(server,"    http://%s",computer_name);
-            
-            if(server->port!=80)
-                SERVER_INFO(server,":%d",server->port);
-            
-            SERVER_INFO(server,"/\n");
-        }
-    }
-    
-#else
-    
-    {
-        struct ifaddrs *interfaces;
-        if(getifaddrs(&interfaces)<0)
-        {
-            SERVER_INFO(server,"Get network interfaces.");
-            return;
-        }
-        
-        for(struct ifaddrs *ifa=interfaces;ifa;ifa=ifa->ifa_next)
-        {
-            if(ifa->ifa_addr->sa_family==AF_INET)
-            {
-                struct sockaddr_in *addr_in=(struct sockaddr_in *)ifa->ifa_addr;
-                
-                uint32_t addr=ntohl(addr_in->sin_addr.s_addr);
-                
-                if(addr==0x7F000001)
-                    continue;//don't bother printing localhost.
-                
-                SERVER_INFO(server,"    http://%d.%d.%d.%d",(addr>>24)&0xFF,(addr>>16)&0xFF,(addr>>8)&0xFF,(addr>>0)&0xFF);
-                
-                if(server->port!=80)
-                    SERVER_INFO(server,":%d",server->port);
-                
-                SERVER_INFO(server,"/\n");
-            }
-        }
-        
-        freeifaddrs(interfaces);
-        interfaces=NULL;
-        
-        SERVER_INFO(server,"\n");
-    }
-    
-#endif
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -1024,18 +990,17 @@ static int accept_request(yhsServer *server,SOCKET *accepted_sock)
     }
 	
 #ifndef _WIN32
-
+#ifndef __linux__
 	// Suppress SIGPIPE. I am quite capable of checking return values
 	// each time. (Well... I think.)
 	{
-		int value=1;
 		if(setsockopt(*accepted_sock,SOL_SOCKET,SO_NOSIGPIPE,&value,sizeof value)<0)
 		{
 			SERVER_SOCKET_ERROR(server,"Set SO_NOSIGPIPE on accepted socket.");
 			return 0;
 		}
 	}
-
+#endif
 #endif//_WIN32
 	
 	inet_ntop(AF_INET,&client_addr.sin_addr,client_addr_str,sizeof client_addr_str);
@@ -1413,7 +1378,11 @@ static int send_unbuffered_bytes(yhsRequest *re,const void *data,size_t num_byte
 
 	while(left>0)
 	{
+#ifdef __linux__
+		int n=send(re->sock,src,left,MSG_NOSIGNAL);
+#else
 		int n=send(re->sock,src,left,0);
+#endif
 		if(n<=0)
 		{
 			SERVER_SOCKET_ERROR(re->server,"write.");
@@ -1633,10 +1602,13 @@ static void close_connection_cleanly(yhsRequest *re)
 			do_websocket_closing_handshake(re);
 			break;
 	}
-
+#ifdef __linux__
+	if(shutdown(re->sock,SHUT_WR)<0)
+		SERVER_SOCKET_ERROR(re->server,"shutdown with SHUT_WR during clean close - this error will be ignored");
+#else
 	if(shutdown(re->sock,SD_SEND)<0)
 		SERVER_SOCKET_ERROR(re->server,"shutdown with SD_SEND during clean close - this error will be ignored");
-
+#endif
 	for(;;)
 	{
 		char tmp;
@@ -2091,11 +2063,7 @@ int yhs_update(yhsServer *server)
 			if(!create_listen_socket(server))
 				server->state=SS_ERROR;
 			else
-			{
-				print_likely_urls(server);
-				
 				server->state=SS_RUNNING;
-			}
 		}
 			break;
 			

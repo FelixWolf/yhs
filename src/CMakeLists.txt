@@ -29,3 +29,6 @@ else()
 endif()
 
 add_executable(yocto ${SOURCE_FILES})
+if(MINGW)
+    target_link_libraries(yocto ws2_32)
+endif()

@@ -57,11 +57,11 @@ typedef int SOCKET;
 
 // Windows portajunk
 #ifdef WIN32
-
+#define _WIN32_WINNT _WIN32_WINNT_WIN7
 #define _CRTDBG_MAP_ALLOC
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
-#include <WS2tcpip.h>
+#include <ws2tcpip.h>
 #include <windows.h>
 #include <malloc.h>
 #include <crtdbg.h>

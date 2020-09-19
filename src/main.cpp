@@ -17,6 +17,11 @@
 #include <direct.h>
 #include <conio.h>
 
+typedef unsigned __int64 uint64_t;
+typedef unsigned __int32 uint32_t;
+typedef unsigned __int16 uint16_t;
+typedef unsigned __int8 uint8_t;
+
 #endif
 
 //////////////////////////////////////////////////////////////////////////
@@ -123,7 +128,7 @@ int main(int argc,char *argv[])
     char directory[1000];
     getcwd(directory, sizeof directory);
     
-    u_int16_t port = 80;
+    int port = 80;
     char sname[256] = "Yocto HTTP server";
     
     int c;
